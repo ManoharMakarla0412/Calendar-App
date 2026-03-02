@@ -102,8 +102,9 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
       _endTime = TimeOfDay.fromDateTime(_endDate);
       _isAllDay = widget.event!.isAllDay;
       _selectedColor = widget.event!.color;
-      if (widget.event!.customColor != null)
+      if (widget.event!.customColor != null) {
         _customColor = widget.event!.customColor!;
+      }
       _recurrenceRule = widget.event!.recurrence;
       _reminders = List.from(widget.event!.reminders);
       _selectedCalendarId = widget.event!.calendarId;
@@ -164,10 +165,14 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
       setState(() {
         if (isStart) {
           _startDate = picked;
-          if (_endDate.isBefore(_startDate)) _endDate = _startDate;
+          if (_endDate.isBefore(_startDate)) {
+            _endDate = _startDate;
+          }
         } else {
           _endDate = picked;
-          if (_startDate.isAfter(_endDate)) _startDate = _endDate;
+          if (_startDate.isAfter(_endDate)) {
+            _startDate = _endDate;
+          }
         }
       });
     }
@@ -230,14 +235,15 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
               ),
               ..._predefinedReminders.map((d) {
                 String label;
-                if (d.inMinutes == 0)
+                if (d.inMinutes == 0) {
                   label = 'At time of event';
-                else if (d.inMinutes < 60)
+                } else if (d.inMinutes < 60) {
                   label = '${d.inMinutes} minutes before';
-                else if (d.inHours < 24)
+                } else if (d.inHours < 24) {
                   label = '${d.inHours} hour(s) before';
-                else
+                } else {
                   label = '${d.inDays} day(s) before';
+                }
 
                 final isSelected = _reminders.any(
                   (r) => r.inMinutes == d.inMinutes,
@@ -411,7 +417,7 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
   }
 
   Widget _buildColorCircle(Color color) {
-    bool isSelected = _customColor.value == color.value;
+    bool isSelected = _customColor.toARGB32() == color.toARGB32();
     return GestureDetector(
       onTap: () {
         setState(() => _customColor = color);
@@ -610,8 +616,9 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
                     isDark: isDark,
                     errorText: _titleError,
                     onChanged: (val) {
-                      if (_titleError != null)
+                      if (_titleError != null) {
                         setState(() => _titleError = null);
+                      }
                     },
                     textStyle: const TextStyle(
                       fontSize: 18,
@@ -671,7 +678,8 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
                     trailing: Switch.adaptive(
                       value: _isAllDay,
                       onChanged: (v) => setState(() => _isAllDay = v),
-                      activeColor: theme.colorScheme.primary,
+                      activeTrackColor: theme.colorScheme.primary.withValues(alpha: 0.5),
+                      activeThumbColor: theme.colorScheme.primary,
                     ),
                   ),
                   _buildDivider(isDark),
@@ -733,8 +741,9 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
                           ),
                         ),
                       );
-                      if (result != null)
+                      if (result != null) {
                         setState(() => _recurrenceRule = result);
+                      }
                     },
                   ),
                 ],

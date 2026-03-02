@@ -232,7 +232,7 @@ class Event {
     'url': url,
     'attendees': attendees,
     'organizer': organizer,
-    'customColor': customColor?.value, // Changed from toARGB32() to value for simpler compatibility
+    'customColor': customColor?.toARGB32(),
     'emoji': emoji,
     'calendarId': calendarId,
     'availability': availability.index,

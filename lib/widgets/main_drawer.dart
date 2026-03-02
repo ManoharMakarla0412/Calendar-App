@@ -116,57 +116,90 @@ class MainDrawer extends ConsumerWidget {
 
                   const Divider(indent: 8, endIndent: 8, height: 32),
 
-                  // Device/Account Calendars
+                  // Device/Account Calendars — one dropdown per account
                   Consumer(
                     builder: (context, ref, child) {
                       return ref
                           .watch(deviceCalendarsProvider)
                           .when(
                             data: (calendars) {
-                              if (calendars.isEmpty) {
+                              // Group by individual accountName (each
+                              // account = one dropdown)
+                              final Map<String, List<dynamic>> byAccount =
+                                  {};
+                              for (var c in calendars) {
+                                final key =
+                                    (c.accountName?.isNotEmpty == true)
+                                        ? c.accountName!
+                                        : 'My phone';
+                                byAccount.putIfAbsent(key, () => []).add(c);
+                              }
+
+                              if (byAccount.isEmpty) {
                                 return _buildAccountSection(
                                   context: context,
                                   title: 'My phone',
                                   icon: Icons.phone_android_outlined,
-                                  children: [],
+                                  children: const [],
                                 );
                               }
 
-                              final Map<String, List<dynamic>> grouped = {};
-                              for (var c in calendars) {
-                                final key = c.accountName ?? 'Local';
-                                if (grouped[key] == null) grouped[key] = [];
-                                grouped[key]!.add(c);
-                              }
-
                               return Column(
-                                children: grouped.entries.map((entry) {
+                                children: byAccount.entries.map((entry) {
+                                  final accountNameRaw = entry.key;
+                                  final accountNameLower =
+                                      accountNameRaw.toLowerCase();
+                                  final accountType = (entry.value.first
+                                              .accountType ??
+                                          '')
+                                      .toLowerCase();
+
+                                  // Detect account type for icon/label
                                   final isGoogle =
-                                      entry.key.toLowerCase().contains(
-                                        'google',
-                                      ) ||
-                                      entry.key.toLowerCase().contains(
-                                        '@gmail',
-                                      );
-                                  final isSamsung = entry.key
-                                      .toLowerCase()
-                                      .contains('samsung');
+                                      accountType.contains('google') ||
+                                      accountNameLower.contains('@gmail') ||
+                                      accountNameLower.contains('google');
+                                  final isSamsung =
+                                      accountType.contains('samsung') ||
+                                      accountType.contains('com.osp') ||
+                                      accountNameLower.contains('samsung');
+                                  final isLocal =
+                                      accountNameRaw == 'My phone' ||
+                                      accountType.contains('local') ||
+                                      accountType.isEmpty;
+
+                                  final String sectionTitle = isGoogle
+                                      ? 'Google'
+                                      : isSamsung
+                                          ? 'Samsung account'
+                                          : isLocal
+                                              ? 'My phone'
+                                              : accountNameRaw;
+
+                                  final String? sectionSubtitle = isGoogle ||
+                                          isSamsung
+                                      ? accountNameRaw
+                                      : null;
+
+                                  final IconData sectionIcon = isGoogle
+                                      ? Icons.account_circle
+                                      : isSamsung
+                                          ? Icons.account_circle_outlined
+                                          : isLocal
+                                              ? Icons.phone_android_outlined
+                                              : Icons
+                                                  .calendar_today_outlined;
+
+                                  final Color? sectionIconColor = isGoogle
+                                      ? const Color(0xFF4285F4)
+                                      : null;
 
                                   return _buildAccountSection(
                                     context: context,
-                                    title: isGoogle
-                                        ? 'Google'
-                                        : (isSamsung
-                                              ? 'Samsung account'
-                                              : entry.key),
-                                    subtitle: isGoogle || isSamsung
-                                        ? entry.key
-                                        : null,
-                                    icon: isGoogle
-                                        ? Icons.account_circle
-                                        : (isSamsung
-                                              ? Icons.account_circle_outlined
-                                              : Icons.phone_android_outlined),
+                                    title: sectionTitle,
+                                    subtitle: sectionSubtitle,
+                                    icon: sectionIcon,
+                                    iconColor: sectionIconColor,
                                     children: entry.value
                                         .map(
                                           (cal) => _buildCalendarItem(
@@ -174,7 +207,10 @@ class MainDrawer extends ConsumerWidget {
                                             label: cal.name ?? 'Calendar',
                                             color: cal.color != null
                                                 ? Color(cal.color!)
-                                                : theme.colorScheme.primary,
+                                                : (isGoogle
+                                                    ? const Color(0xFF4285F4)
+                                                    : theme
+                                                        .colorScheme.primary),
                                           ),
                                         )
                                         .toList(),
@@ -190,7 +226,7 @@ class MainDrawer extends ConsumerWidget {
                                 ),
                               ),
                             ),
-                            error: (e, __) => const SizedBox(),
+                            error: (e, _) => const SizedBox(),
                           );
                     },
                   ),
@@ -328,11 +364,12 @@ class MainDrawer extends ConsumerWidget {
     required String title,
     String? subtitle,
     required IconData icon,
+    Color? iconColor,
     required List<Widget> children,
   }) {
     final theme = Theme.of(context);
     return ExpansionTile(
-      leading: Icon(icon, color: theme.colorScheme.primary),
+      leading: Icon(icon, color: iconColor ?? theme.colorScheme.primary),
       title: Text(
         title,
         style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 16),

@@ -5,6 +5,7 @@ import '../providers/settings_provider.dart';
 import '../features/events/presentation/events_view_model.dart';
 import '../services/birthday_service.dart';
 import '../services/notification_service.dart';
+import 'main_screen.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -37,13 +38,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     } else {
       ref.read(settingsProvider.notifier).setOnboardingCompleted(true);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -53,7 +56,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             Align(
               alignment: Alignment.topRight,
               child: TextButton(
-                onPressed: () => ref.read(settingsProvider.notifier).setOnboardingCompleted(true),
+                onPressed: () {
+                  ref.read(settingsProvider.notifier).setOnboardingCompleted(true);
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const MainScreen()),
+                  );
+                },
                 child: const Text('Skip'),
               ),
             ),

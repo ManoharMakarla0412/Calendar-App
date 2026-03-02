@@ -20,14 +20,17 @@ class _WeekViewState extends ConsumerState<WeekView> {
   late PageController _pageController;
   final DateTime _baseDate = DateTime(2024, 1, 1); // Fixed Monday reference
   final int _basePage = 5000;
+  int _lastFirstDayOfWeek = -1; // sentinel — will be set on first build
 
   @override
   void initState() {
     super.initState();
+    final initialFirstDay = ref.read(settingsProvider).firstDayOfWeek;
+    _lastFirstDayOfWeek = initialFirstDay;
     _pageController = PageController(
       initialPage: _calculatePage(
         ref.read(selectedDateProvider),
-        ref.read(settingsProvider).firstDayOfWeek,
+        initialFirstDay,
       ),
     );
   }
@@ -90,7 +93,12 @@ class _WeekViewState extends ConsumerState<WeekView> {
   void _syncPageController(DateTime selectedDate, int firstDayOfWeek) {
     if (_pageController.hasClients) {
       final targetPage = _calculatePage(selectedDate, firstDayOfWeek);
-      if (_pageController.page?.round() != targetPage) {
+      final currentPos =
+          (_pageController.page ?? _pageController.initialPage.toDouble());
+
+      if ((currentPos - targetPage).abs() > 3) {
+        _pageController.jumpToPage(targetPage);
+      } else if (currentPos.round() != targetPage) {
         _pageController.animateToPage(
           targetPage,
           duration: const Duration(milliseconds: 300),
@@ -113,10 +121,30 @@ class _WeekViewState extends ConsumerState<WeekView> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final firstDayOfWeek = settings.firstDayOfWeek;
-    final weekStart = _getStartOfWeek(selectedDate, firstDayOfWeek);
 
-    // Sync page controller if selected date changed from outside
-    _syncPageController(selectedDate, firstDayOfWeek);
+    // Recreate PageController when firstDayOfWeek changes
+    if (_lastFirstDayOfWeek != firstDayOfWeek) {
+      _lastFirstDayOfWeek = firstDayOfWeek;
+      final newPage = _calculatePage(selectedDate, firstDayOfWeek);
+      // Dispose old and create new controller with correct initial page
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final old = _pageController;
+        setState(() {
+          _pageController = PageController(initialPage: newPage);
+        });
+        old.dispose();
+      });
+    }
+
+    // Listen to changes in selectedDate and sync the page controller
+    ref.listen(selectedDateProvider, (previous, next) {
+      if (previous == null || !isSameDay(previous, next)) {
+        _syncPageController(next, firstDayOfWeek);
+      }
+    });
+
+    final weekStart = _getStartOfWeek(selectedDate, firstDayOfWeek);
 
     return Column(
       children: [
@@ -638,15 +666,25 @@ class _WeekMonthYearPickerSheet extends StatefulWidget {
 
 class _WeekMonthYearPickerSheetState extends State<_WeekMonthYearPickerSheet> {
   late int _selectedYear;
+  int? _selectedMonth;
 
   @override
   void initState() {
     super.initState();
     _selectedYear = widget.initialDate.year;
+    // Don't auto-select month so users can see the month grid first, 
+    // unless they want to jump straight to the current month.
   }
 
-  void _previousYear() => setState(() => _selectedYear--);
-  void _nextYear() => setState(() => _selectedYear++);
+  void _previousYear() => setState(() {
+    _selectedYear--;
+    _selectedMonth = null;
+  });
+  
+  void _nextYear() => setState(() {
+    _selectedYear++;
+    _selectedMonth = null;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -655,6 +693,7 @@ class _WeekMonthYearPickerSheetState extends State<_WeekMonthYearPickerSheet> {
 
     return Container(
       margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(28),
@@ -663,6 +702,7 @@ class _WeekMonthYearPickerSheetState extends State<_WeekMonthYearPickerSheet> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 16),
+          // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -672,9 +712,25 @@ class _WeekMonthYearPickerSheetState extends State<_WeekMonthYearPickerSheet> {
                   icon: const Icon(Icons.chevron_left_rounded),
                   onPressed: _previousYear,
                 ),
-                Text(
-                  '$_selectedYear',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                GestureDetector(
+                  onTap: () => setState(() => _selectedMonth = null),
+                  child: Column(
+                    children: [
+                      Text(
+                        '$_selectedYear',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      if (_selectedMonth != null)
+                        Text(
+                          DateFormat('MMMM').format(DateTime(_selectedYear, _selectedMonth!)),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: theme.primaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.chevron_right_rounded),
@@ -684,55 +740,103 @@ class _WeekMonthYearPickerSheetState extends State<_WeekMonthYearPickerSheet> {
             ),
           ),
           const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            child: GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 1.5,
-              ),
-              itemCount: 12,
-              itemBuilder: (context, index) {
-                final month = index + 1;
-                final monthName = DateFormat(
-                  'MMMM',
-                ).format(DateTime(_selectedYear, month));
-                final isSelected =
-                    widget.initialDate.year == _selectedYear &&
-                    widget.initialDate.month == month;
+          
+          if (_selectedMonth == null)
+            // Month Grid
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.5,
+                ),
+                itemCount: 12,
+                itemBuilder: (context, index) {
+                  final month = index + 1;
+                  final monthName = DateFormat('MMM').format(DateTime(_selectedYear, month));
+                  final isSelected =
+                      widget.initialDate.year == _selectedYear &&
+                      widget.initialDate.month == month;
 
-                return GestureDetector(
-                  onTap: () =>
-                      Navigator.pop(context, DateTime(_selectedYear, month, 1)),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? theme.primaryColor
-                          : (isDark ? Colors.white10 : Colors.grey[100]),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      monthName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.w500,
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedMonth = month),
+                    child: Container(
+                      decoration: BoxDecoration(
                         color: isSelected
-                            ? Colors.white
-                            : (isDark ? Colors.white : Colors.black87),
+                            ? theme.primaryColor
+                            : (isDark ? Colors.white10 : Colors.grey[100]),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        monthName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : (isDark ? Colors.white : Colors.black87),
+                        ),
                       ),
                     ),
+                  );
+                },
+              ),
+            )
+          else
+            // Day Grid for selected month
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      mainAxisSpacing: 4,
+                      crossAxisSpacing: 4,
+                    ),
+                    itemCount: DateTime(_selectedYear, _selectedMonth! + 1, 0).day,
+                    itemBuilder: (context, index) {
+                      final day = index + 1;
+                      final date = DateTime(_selectedYear, _selectedMonth!, day);
+                      final isSelected = widget.initialDate.year == date.year &&
+                          widget.initialDate.month == date.month &&
+                          widget.initialDate.day == date.day;
+                      final isToday = DateTime.now().year == date.year &&
+                          DateTime.now().month == date.month &&
+                          DateTime.now().day == date.day;
+
+                      return GestureDetector(
+                        onTap: () => Navigator.pop(context, date),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? theme.primaryColor
+                                : (isToday ? theme.primaryColor.withValues(alpha: 0.1) : Colors.transparent),
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '$day',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected 
+                                  ? Colors.white 
+                                  : (isToday ? theme.primaryColor : (isDark ? Colors.white : Colors.black87)),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

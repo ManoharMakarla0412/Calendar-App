@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../features/events/presentation/events_view_model.dart';
 import '../providers/date_provider.dart';
 import '../widgets/multi_day_timetable.dart';
 import 'add_event_screen.dart';
-import '../providers/mood_provider.dart';
 
 class DayView extends ConsumerStatefulWidget {
   const DayView({super.key});
@@ -19,175 +19,267 @@ class _DayViewState extends ConsumerState<DayView> {
   final int _basePage = 5000;
   late DateTime _baseDate;
 
+  // Date strip — uses a fixed window of dates centered on today
+  // The "anchor" is the date at the center of the visible strip.
+  // We keep track of it so we can rebuild when the user swipes far.
+  late ScrollController _stripScrollController;
+  // Each strip item is 63px wide (55 width + 4 margin each side)
+  static const double _itemWidth = 63.0;
+  // We show _windowSize items max in the strip.
+  // The "center" item index within the window is _windowSize ~/ 2
+  static const int _windowSize = 61; // ±30 days
+  late DateTime _stripCenterDate; // center of the current strip window
+
   @override
   void initState() {
     super.initState();
-    _baseDate = DateTime.now();
+    _baseDate = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    _baseDate = _baseDate; // normalize
+
+    final initialSelected = DateTime.now();
+    _stripCenterDate = DateTime(
+      initialSelected.year,
+      initialSelected.month,
+      initialSelected.day,
+    );
+
     _pageController = PageController(initialPage: _basePage);
+    // Start the strip so the selected date is centred
+    final initialOffset = (_windowSize ~/ 2) * _itemWidth;
+    _stripScrollController = ScrollController(
+      initialScrollOffset: initialOffset,
+    );
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _stripScrollController.dispose();
     super.dispose();
   }
 
+  // Called when the user swipes the day PageView
   void _onPageChanged(int index) {
     final newDate = _baseDate.add(Duration(days: index - _basePage));
-    ref.read(selectedDateProvider.notifier).setDate(newDate);
+    final currentSelected = ref.read(selectedDateProvider);
+    if (!isSameDay(newDate, currentSelected)) {
+      ref.read(selectedDateProvider.notifier).setDate(newDate);
+      // Scroll strip to keep selected item centred
+      _scrollStripTo(newDate, animate: true);
+    }
+  }
+
+  // Scroll the date strip so [date] is centred in the visible area.
+  void _scrollStripTo(DateTime date, {bool animate = true}) {
+    if (!_stripScrollController.hasClients) return;
+
+    final diff = DateTime(date.year, date.month, date.day)
+        .difference(_stripCenterDate)
+        .inDays;
+    final centerItemIndex = _windowSize ~/ 2;
+    final targetItemIndex = centerItemIndex + diff;
+
+    // Clamp: if targetItemIndex is near the edges, re-center the window
+    if (targetItemIndex < 5 || targetItemIndex > _windowSize - 5) {
+      // Shift the window center to the current date,
+      // then immediately jump without animation
+      setState(() {
+        _stripCenterDate = DateTime(date.year, date.month, date.day);
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_stripScrollController.hasClients) {
+          _stripScrollController.jumpTo(
+            ((_windowSize ~/ 2) * _itemWidth).clamp(
+              0,
+              _stripScrollController.position.maxScrollExtent,
+            ),
+          );
+        }
+      });
+      return;
+    }
+
+    final targetOffset = (targetItemIndex * _itemWidth).clamp(
+      0.0,
+      _stripScrollController.position.maxScrollExtent,
+    );
+
+    if (animate) {
+      _stripScrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _stripScrollController.jumpTo(targetOffset);
+    }
+  }
+
+  // Sync the main PageView to a given date (called from external provider changes)
+  void _syncPageController(DateTime selectedDate) {
+    if (!_pageController.hasClients) return;
+
+    final diff = DateTime(selectedDate.year, selectedDate.month, selectedDate.day)
+        .difference(_baseDate)
+        .inDays;
+    final targetPage = _basePage + diff;
+    final currentPage =
+        (_pageController.page ?? _pageController.initialPage.toDouble()).round();
+
+    if (currentPage == targetPage) return;
+
+    // Jump (instant) for large distances, animate for short
+    if ((currentPage - targetPage).abs() > 5) {
+      _pageController.jumpToPage(targetPage);
+    } else {
+      _pageController.animateToPage(
+        targetPage,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+    _scrollStripTo(selectedDate, animate: (currentPage - targetPage).abs() <= 5);
   }
 
   @override
   Widget build(BuildContext context) {
-    final rawSelectedDate = ref.watch(selectedDateProvider);
-    final selectedDate = DateTime(
-      rawSelectedDate.year,
-      rawSelectedDate.month,
-      rawSelectedDate.day,
-    );
-    final eventsMap = ref.watch(filteredEventsProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final eventsMap = ref.watch(filteredEventsProvider);
+    final selectedDate = ref.watch(selectedDateProvider);
 
-    // Check if we need to jump the page controller if selectedDate changed from outside
-    _syncPageController(selectedDate);
+    // Listen to provider changes caused by external sources (e.g. YearView tap)
+    ref.listen<DateTime>(selectedDateProvider, (previous, next) {
+      if (previous != null && isSameDay(previous, next)) return;
+      _syncPageController(next);
+    });
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
-          // Centered Month Header
+          // Month / Year header — tappable to jump via picker
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: MediaQuery.withNoTextScaling(
-              child: Text(
-                selectedDate.year == DateTime.now().year
-                    ? DateFormat('MMM').format(selectedDate).toUpperCase()
-                    : DateFormat('MMM yyyy').format(selectedDate).toUpperCase(),
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.5,
-                  color: theme.textTheme.titleLarge?.color,
+            child: InkWell(
+              onTap: _showMonthYearPicker,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: MediaQuery.withNoTextScaling(
+                  child: Text(
+                    selectedDate.year == DateTime.now().year
+                        ? DateFormat('MMM')
+                            .format(selectedDate)
+                            .toUpperCase()
+                        : DateFormat('MMM yyyy')
+                            .format(selectedDate)
+                            .toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.5,
+                      color: theme.textTheme.titleLarge?.color,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
 
-          // Date Selection Row (Samsung Style)
-          Semantics(
-            label:
-                "Selected Date: \${DateFormat('EEEE, MMMM d').format(selectedDate)}. \${(eventsMap[DateTime(selectedDate.year, selectedDate.month, selectedDate.day)]?.isNotEmpty ?? false) ? 'Has events' : 'No events'}",
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 45,
-                    height: 45,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white : Colors.black,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    alignment: Alignment.center,
-                    child: MediaQuery.withNoTextScaling(
-                      child: Text(
-                        '${selectedDate.day}',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.black : Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Flexible(
-                    child: Text(
-                      DateFormat('EEEE').format(selectedDate),
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Spacer(),
-                  Semantics(
-                    button: true,
-                    label: 'Set mood for the day',
-                    child: GestureDetector(
-                      onTap: () => _showMoodPicker(context, ref, selectedDate),
-                      child: Consumer(
-                        builder: (context, ref, _) {
-                          final moodMap = ref.watch(moodProvider);
-                          final dateKey =
-                              "${selectedDate.year}-${selectedDate.month}-${selectedDate.day}";
-                          final mood = moodMap[dateKey];
+          // ── Date Strip (bounded, no ANR) ────────────────────────────
+          SizedBox(
+            height: 90,
+            child: ListView.builder(
+              controller: _stripScrollController,
+              scrollDirection: Axis.horizontal,
+              // Bounded item count — no infinite scroll, no ANR
+              itemCount: _windowSize,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.zero,
+              itemBuilder: (context, index) {
+                final centerIdx = _windowSize ~/ 2;
+                final date = _stripCenterDate
+                    .add(Duration(days: index - centerIdx));
+                final isSelected = isSameDay(date, selectedDate);
+                final isToday = isSameDay(date, DateTime.now());
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              if (mood != null)
-                                Text(
-                                  mood.label,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark
-                                        ? Colors.white38
-                                        : Colors.grey[400],
-                                  ),
-                                ),
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: mood != null
-                                    ? BoxDecoration(
-                                        color: isDark
-                                            ? Colors.white.withValues(
-                                                alpha: 0.05,
-                                              )
-                                            : Colors.grey[100],
-                                        shape: BoxShape.circle,
-                                      )
-                                    : null,
-                                child: mood != null
-                                    ? Text(
-                                        mood.emoji,
-                                        style: const TextStyle(fontSize: 24),
-                                      )
-                                    : Icon(
-                                        Icons.sentiment_satisfied_alt_outlined,
-                                        size: 28,
-                                        color: isDark
-                                            ? Colors.white54
-                                            : Colors.grey[600],
-                                      ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                return GestureDetector(
+                  onTap: () {
+                    ref.read(selectedDateProvider.notifier).setDate(date);
+                    _syncPageController(date);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 55,
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? (isDark ? Colors.white : Colors.black)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: isToday && !isSelected
+                          ? Border.all(
+                              color: isDark
+                                  ? Colors.white24
+                                  : Colors.black12,
+                              width: 1,
+                            )
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          DateFormat('EEE').format(date).toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected
+                                ? (isDark ? Colors.black : Colors.white)
+                                : (isDark
+                                    ? Colors.white38
+                                    : Colors.black38),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${date.day}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected
+                                ? (isDark ? Colors.black : Colors.white)
+                                : (isDark ? Colors.white : Colors.black),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
 
+          // ── Day Timetable (PageView) ─────────────────────────────────
           Expanded(
             child: Stack(
               children: [
                 PageView.builder(
                   controller: _pageController,
                   onPageChanged: _onPageChanged,
+                  allowImplicitScrolling: true,
                   itemBuilder: (context, index) {
-                    final date = _baseDate.add(
-                      Duration(days: index - _basePage),
-                    );
-                    final dayKey = DateTime(date.year, date.month, date.day);
+                    final date =
+                        _baseDate.add(Duration(days: index - _basePage));
+                    final dayKey =
+                        DateTime(date.year, date.month, date.day);
                     final events = eventsMap[dayKey] ?? [];
 
                     return RepaintBoundary(
@@ -218,11 +310,12 @@ class _DayViewState extends ConsumerState<DayView> {
                               backgroundColor: Colors.transparent,
                               builder: (context) => Padding(
                                 padding: EdgeInsets.only(
-                                  top: MediaQuery.of(context).padding.top + 40,
+                                  top:
+                                      MediaQuery.of(context).padding.top +
+                                      40,
                                 ),
                                 child: AddEventScreen(
-                                  initialDate: selectedDate,
-                                ),
+                                    initialDate: selectedDate),
                               ),
                             );
                           },
@@ -234,12 +327,15 @@ class _DayViewState extends ConsumerState<DayView> {
                             ),
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.grey[900]!.withValues(alpha: 0.8)
-                                  : Colors.grey[100]!.withValues(alpha: 0.8),
+                                  ? Colors.grey[900]!
+                                      .withValues(alpha: 0.8)
+                                  : Colors.grey[100]!
+                                      .withValues(alpha: 0.8),
                               borderRadius: BorderRadius.circular(30),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
+                                  color:
+                                      Colors.black.withValues(alpha: 0.05),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 ),
@@ -265,13 +361,17 @@ class _DayViewState extends ConsumerState<DayView> {
                             backgroundColor: Colors.transparent,
                             builder: (context) => Padding(
                               padding: EdgeInsets.only(
-                                top: MediaQuery.of(context).padding.top + 40,
+                                top:
+                                    MediaQuery.of(context).padding.top +
+                                    40,
                               ),
-                              child: AddEventScreen(initialDate: selectedDate),
+                              child: AddEventScreen(
+                                  initialDate: selectedDate),
                             ),
                           );
                         },
-                        backgroundColor: isDark ? Colors.white : Colors.black,
+                        backgroundColor:
+                            isDark ? Colors.white : Colors.black,
                         elevation: 4,
                         child: Icon(
                           Icons.add,
@@ -289,101 +389,227 @@ class _DayViewState extends ConsumerState<DayView> {
     );
   }
 
-  void _showMoodPicker(BuildContext context, WidgetRef ref, DateTime date) {
+  void _showMonthYearPicker() async {
+    final DateTime? result = await showModalBottomSheet<DateTime>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _DayMonthYearPickerSheet(
+        initialDate: ref.read(selectedDateProvider),
+      ),
+    );
+
+    if (result != null) {
+      ref.read(selectedDateProvider.notifier).setDate(result);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Month / Year / Day picker sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DayMonthYearPickerSheet extends StatefulWidget {
+  final DateTime initialDate;
+  const _DayMonthYearPickerSheet({required this.initialDate});
+
+  @override
+  State<_DayMonthYearPickerSheet> createState() =>
+      _DayMonthYearPickerSheetState();
+}
+
+class _DayMonthYearPickerSheetState
+    extends State<_DayMonthYearPickerSheet> {
+  late int _selectedYear;
+  int? _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedYear = widget.initialDate.year;
+  }
+
+  void _previousYear() => setState(() {
+        _selectedYear--;
+        _selectedMonth = null;
+      });
+
+  void _nextYear() => setState(() {
+        _selectedYear++;
+        _selectedMonth = null;
+      });
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Text(
-              'Mood of the day',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: theme.textTheme.titleLarge?.color,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'How are you feeling today?',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 350,
-              child: GridView.builder(
-                padding: const EdgeInsets.only(bottom: 20),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  mainAxisSpacing: 20,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 0.85,
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left_rounded),
+                  onPressed: _previousYear,
                 ),
-                itemCount: availableMoods.length,
-                itemBuilder: (context, index) {
-                  final mood = availableMoods[index];
-                  return InkWell(
-                    onTap: () {
-                      ref.read(moodProvider.notifier).setMood(date, mood);
-                      Navigator.pop(context);
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(mood.emoji, style: const TextStyle(fontSize: 32)),
-                        const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () =>
+                      setState(() => _selectedMonth = null),
+                  child: Column(
+                    children: [
+                      Text(
+                        '$_selectedYear',
+                        style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      if (_selectedMonth != null)
                         Text(
-                          mood.label,
+                          DateFormat('MMMM').format(
+                              DateTime(_selectedYear, _selectedMonth!)),
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: theme.textTheme.bodyMedium?.color,
+                            fontSize: 14,
+                            color: theme.primaryColor,
+                            fontWeight: FontWeight.w600,
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right_rounded),
+                  onPressed: _nextYear,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          if (_selectedMonth == null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 1.5,
+                ),
+                itemCount: 12,
+                itemBuilder: (context, index) {
+                  final month = index + 1;
+                  final monthName = DateFormat('MMM')
+                      .format(DateTime(_selectedYear, month));
+                  final isSelected =
+                      widget.initialDate.year == _selectedYear &&
+                          widget.initialDate.month == month;
+
+                  return GestureDetector(
+                    onTap: () =>
+                        setState(() => _selectedMonth = month),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? theme.primaryColor
+                            : (isDark
+                                ? Colors.white10
+                                : Colors.grey[100]),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        monthName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
+                          color: isSelected
+                              ? Colors.white
+                              : (isDark
+                                  ? Colors.white
+                                  : Colors.black87),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: 4,
+                  crossAxisSpacing: 4,
+                ),
+                itemCount:
+                    DateTime(_selectedYear, _selectedMonth! + 1, 0).day,
+                itemBuilder: (context, index) {
+                  final day = index + 1;
+                  final date =
+                      DateTime(_selectedYear, _selectedMonth!, day);
+                  final isSelected =
+                      isSameDay(date, widget.initialDate);
+                  final isToday = isSameDay(date, DateTime.now());
+
+                  return GestureDetector(
+                    onTap: () => Navigator.pop(context, date),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? theme.primaryColor
+                            : (isToday
+                                ? theme.primaryColor
+                                    .withValues(alpha: 0.1)
+                                : Colors.transparent),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$day',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: isSelected
+                              ? Colors.white
+                              : (isToday
+                                  ? theme.primaryColor
+                                  : (isDark
+                                      ? Colors.white
+                                      : Colors.black87)),
+                        ),
+                      ),
                     ),
                   );
                 },
               ),
             ),
-          ],
-        ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
-  }
-
-  void _syncPageController(DateTime selectedDate) {
-    if (_pageController.hasClients) {
-      final targetPage = _basePage + selectedDate.difference(_baseDate).inDays;
-      if (_pageController.page?.round() != targetPage) {
-        _pageController.animateToPage(
-          targetPage,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      }
-    }
   }
 }

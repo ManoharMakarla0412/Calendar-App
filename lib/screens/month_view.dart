@@ -17,7 +17,6 @@ class MonthView extends ConsumerStatefulWidget {
 
 class _MonthViewState extends ConsumerState<MonthView> {
   late DateTime _focusedDay;
-  final CalendarFormat _calendarFormat = CalendarFormat.month;
   // Track the last month we synced to avoid redundant jumps
   DateTime _lastSyncedMonthYear = DateTime.now();
 
@@ -231,22 +230,29 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
                 selectedDayPredicate: (day) => isSameDay(selectedDate, day),
                 eventLoader: (day) => _getEventsForDay(day, events),
-                startingDayOfWeek: settings.firstDayOfWeek == 1
-                    ? StartingDayOfWeek.monday
-                    : (settings.firstDayOfWeek == 6
-                          ? StartingDayOfWeek.saturday
-                          : StartingDayOfWeek.sunday),
+                startingDayOfWeek: () {
+                  switch (settings.firstDayOfWeek) {
+                    case 1: return StartingDayOfWeek.monday;
+                    case 2: return StartingDayOfWeek.tuesday;
+                    case 3: return StartingDayOfWeek.wednesday;
+                    case 4: return StartingDayOfWeek.thursday;
+                    case 5: return StartingDayOfWeek.friday;
+                    case 6: return StartingDayOfWeek.saturday;
+                    case 7: return StartingDayOfWeek.sunday;
+                    default: return StartingDayOfWeek.monday;
+                  }
+                }(),
 
                 headerVisible: false,
                 daysOfWeekStyle: DaysOfWeekStyle(
                   weekdayStyle: TextStyle(
                     fontSize: 12 * fs,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w100,
                     color: isDark ? Colors.white70 : Colors.black54,
                   ),
                   weekendStyle: TextStyle(
                     fontSize: 12 * fs,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w100,
                     color: Colors.red.withValues(alpha: 0.8),
                   ),
                 ),
@@ -524,11 +530,11 @@ class _MonthViewState extends ConsumerState<MonthView> {
                           return a.startTime.compareTo(b.startTime);
                         });
 
-                      return SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
+                      final isSingleEvent = sortedEvents.length == 1;
+
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                             ...sortedEvents.map((event) {
                               final color =
                                   event.customColor ?? event.color.color;
@@ -581,9 +587,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                       ),
                                       decoration: BoxDecoration(
                                         // Light tint background
-                                        color: displayColor.withValues(
-                                          alpha: isDark ? 0.15 : 0.1,
-                                        ),
+                                        color: Colors.white,
                                         borderRadius: BorderRadius.circular(6),
                                         // Subtle border for definition
                                         border: Border.all(
@@ -620,7 +624,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                               child: Icon(
                                                 Icons.videocam_rounded,
                                                 size: 11 * fs,
-                                                color: displayColor,
+                                                color: Colors.black,
                                               ),
                                             ),
                                           Expanded(
@@ -631,14 +635,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                                   event.title,
                                                   style: TextStyle(
                                                     fontSize:
-                                                        11.5 *
+                                                        9.5 *
                                                         fs, // Standardized premium font size
-                                                    color: isDark
-                                                        ? displayColor
-                                                              .withValues(
-                                                                alpha: 0.95,
-                                                              )
-                                                        : displayColor,
+                                                    color: Colors.black,
                                                     fontWeight:
                                                         (isHoliday ||
                                                             event.isAllDay)
@@ -647,10 +646,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                                     height: 1.1,
                                                     letterSpacing: -0.2,
                                                   ),
-                                                  softWrap: false,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
+                                                  softWrap: true,
+                                                   maxLines: isSingleEvent ? 4 : 2,
+                                                   overflow: TextOverflow.clip,
                                                 ),
                                               ),
                                             ),
@@ -676,8 +674,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                 );
                               }
                             }).toList(),
-                          ],
-                        ),
+                        ],
                       );
                     },
                   ),

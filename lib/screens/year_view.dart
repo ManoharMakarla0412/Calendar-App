@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/date_provider.dart';
 import '../providers/settings_provider.dart';
 import '../features/events/presentation/events_view_model.dart';
+import '../models/event.dart';
 
 class YearView extends ConsumerStatefulWidget {
   final Function(int year, int month)? onMonthSelected;
@@ -312,45 +313,56 @@ class _YearGrid extends ConsumerWidget {
                               selectedDate.year == year &&
                               selectedDate.month == month;
 
-                          return Text(
-                            monthName,
-                            style: TextStyle(
-                              fontWeight: isActive
-                                  ? FontWeight.w900
-                                  : FontWeight.w600,
-                              fontSize: 15,
-                              color: theme.primaryColor.withValues(
-                                alpha: isActive ? 1.0 : 0.8,
+                            return Text(
+                              monthName,
+                              style: TextStyle(
+                                fontWeight: isActive
+                                    ? FontWeight.w900
+                                    : FontWeight.w600,
+                                fontSize: 15,
+                                color: theme.primaryColor.withValues(
+                                  alpha: isActive ? 1.0 : 0.8,
+                                ),
+                                letterSpacing: 0.5,
                               ),
-                              letterSpacing: 0.5,
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: _MonthPreview(year: year, month: month),
-                    ),
-                  ],
+                      Expanded(
+                        child: _MonthPreview(
+                          year: year,
+                          month: month,
+                          events: ref.watch(filteredEventsProvider),
+                          firstDayOfWeek: ref.watch(settingsProvider).firstDayOfWeek,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
+    }
   }
-}
 
-class _MonthPreview extends ConsumerWidget {
+class _MonthPreview extends StatelessWidget {
   final int year;
   final int month;
+  final Map<DateTime, List<Event>> events;
+  final int firstDayOfWeek;
 
-  const _MonthPreview({required this.year, required this.month});
+  const _MonthPreview({
+    required this.year,
+    required this.month,
+    required this.events,
+    required this.firstDayOfWeek,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final events = ref.watch(filteredEventsProvider);
+  Widget build(BuildContext context) {
     final firstDay = DateTime(year, month, 1);
     final lastDay = DateTime(year, month + 1, 0);
     final daysInMonth = lastDay.day;
@@ -364,7 +376,7 @@ class _MonthPreview extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children:
-                  _getWeekDayHeaders(ref.watch(settingsProvider).firstDayOfWeek)
+                  _getWeekDayHeaders(firstDayOfWeek)
                       .map(
                         (d) => Text(
                           d,
@@ -385,9 +397,6 @@ class _MonthPreview extends ConsumerWidget {
                 crossAxisCount: 7,
                 physics: const NeverScrollableScrollPhysics(),
                 children: List.generate(42, (index) {
-                  final firstDayOfWeek = ref
-                      .watch(settingsProvider)
-                      .firstDayOfWeek;
                   final dayIndex =
                       index - ((firstDay.weekday - firstDayOfWeek + 7) % 7);
                   final day = dayIndex + 1;
@@ -471,9 +480,15 @@ class _MonthPreview extends ConsumerWidget {
   }
 
   List<String> _getWeekDayHeaders(int firstDay) {
-    const all = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    if (firstDay == 1) return ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    if (firstDay == 6) return ['S', 'S', 'M', 'T', 'W', 'T', 'F'];
-    return all;
+    // Dart weekday: Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=6, Sun=7
+    // Map to index 0..6 starting from Sunday for the labels array
+    // Labels in Dart weekday order: Mon=1 -> index 0, ..., Sun=7 -> index 6
+    const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S']; // Mon..Sun
+    // firstDay is 1 (Mon) .. 7 (Sun)
+    final startIndex = firstDay - 1; // 0-based index into labels
+    return [
+      ...labels.sublist(startIndex),
+      ...labels.sublist(0, startIndex),
+    ];
   }
 }

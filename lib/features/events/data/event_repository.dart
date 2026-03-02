@@ -23,7 +23,9 @@ class EventRepositoryImpl implements EventRepository {
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? cachedData = prefs.getString(_cacheKey);
-      if (cachedData == null) return [];
+      if (cachedData == null) {
+        return [];
+      }
 
       final List<dynamic> jsonList = jsonDecode(cachedData);
       return jsonList
@@ -71,7 +73,9 @@ class EventRepositoryImpl implements EventRepository {
   ) async {
     try {
       final hasPermission = await requestDeviceCalendarPermissions();
-      if (!hasPermission) return [];
+      if (!hasPermission) {
+        return [];
+      }
 
       final calendarsResult = await _deviceCalendarPlugin.retrieveCalendars();
       if (!calendarsResult.isSuccess || calendarsResult.data == null) {
@@ -79,7 +83,9 @@ class EventRepositoryImpl implements EventRepository {
       }
 
       final calendars = calendarsResult.data!;
-      if (calendars.isEmpty) return [];
+      if (calendars.isEmpty) {
+        return [];
+      }
 
       final List<Event> allDeviceEvents = [];
       final futures = calendars.where((c) => c.id != null).map((
@@ -124,8 +130,9 @@ class EventRepositoryImpl implements EventRepository {
     device_cal.Event dEvent,
     int? calendarColor,
   ) {
-    if (dEvent.eventId == null || dEvent.start == null || dEvent.end == null)
+    if (dEvent.eventId == null || dEvent.start == null || dEvent.end == null) {
       return null;
+    }
 
     String? organizer;
     if (dEvent.attendees != null) {

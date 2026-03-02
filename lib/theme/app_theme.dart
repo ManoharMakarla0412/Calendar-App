@@ -105,9 +105,13 @@ class AppTheme {
         backgroundColor: bgColor,
         surfaceTintColor: Colors.transparent,
         centerTitle: true,
-        titleTextStyle: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+        foregroundColor: isDark ? Colors.white : Colors.black,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: isDark ? Colors.white : Colors.black,
+        ),
         elevation: 0,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
       ),
 
       cardTheme: CardThemeData(

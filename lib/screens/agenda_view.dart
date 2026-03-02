@@ -37,10 +37,12 @@ class _AgendaViewState extends ConsumerState<AgendaView> {
     final end = event.endTime;
 
     if ((now.isAfter(start) || now.isAtSameMomentAs(start)) &&
-        now.isBefore(end))
+        now.isBefore(end)) {
       return true;
-    if (start.isAfter(now) && start.difference(now).inMinutes <= 60)
+    }
+    if (start.isAfter(now) && start.difference(now).inMinutes <= 60) {
       return true;
+    }
 
     return false;
   }
@@ -89,77 +91,48 @@ class _AgendaViewState extends ConsumerState<AgendaView> {
     final settings = ref.watch(settingsProvider);
     final double fs = settings.fontSize;
 
-    final eventsMapRaw = Map<DateTime, List<Event>>.from(
-      ref.watch(filteredEventsProvider),
-    );
+    final eventsMapRaw = ref.watch(filteredEventsProvider);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tmrw = today.add(const Duration(days: 1));
     final next7DaysLimit = today.add(const Duration(days: 7));
 
-    // Filter Logic & Counts
+    // Optimized Single-Pass Filter & Count Logic
     final eventsMap = <DateTime, List<Event>>{};
-    final filterCounts = <AgendaFilter, int>{};
-
-    // Initialize counts
-    for (var filter in AgendaFilter.values) {
-      filterCounts[filter] = 0;
-    }
+    final filterCounts = <AgendaFilter, int>{
+      for (var f in AgendaFilter.values) f: 0
+    };
 
     eventsMapRaw.forEach((date, events) {
       if (events.isEmpty) return;
 
-      // Update counts for each filter type
-      for (var filter in AgendaFilter.values) {
-        bool inc = false;
-        switch (filter) {
-          case AgendaFilter.today:
-            inc = _isSameDay(date, today);
-            break;
-          case AgendaFilter.tomorrow:
-            inc = _isSameDay(date, tmrw);
-            break;
-          case AgendaFilter.next7Days:
-            inc = !date.isBefore(today) && date.isBefore(next7DaysLimit);
-            break;
-          case AgendaFilter.thisMonth:
-            inc = date.month == today.month && date.year == today.year;
-            break;
-          case AgendaFilter.all:
-            inc = !date.isBefore(today);
-            break;
-        }
-        if (inc)
-          filterCounts[filter] = (filterCounts[filter] ?? 0) + events.length;
-      }
+      final isToday = _isSameDay(date, today);
+      final isTomorrow = _isSameDay(date, tmrw);
+      final isNext7 = !date.isBefore(today) && date.isBefore(next7DaysLimit);
+      final isThisMonth = date.month == today.month && date.year == today.year;
+      final isUpcoming = !date.isBefore(today);
 
-      // Filter for display
+      // Update counts
+      if (isToday) filterCounts[AgendaFilter.today] = (filterCounts[AgendaFilter.today] ?? 0) + events.length;
+      if (isTomorrow) filterCounts[AgendaFilter.tomorrow] = (filterCounts[AgendaFilter.tomorrow] ?? 0) + events.length;
+      if (isNext7) filterCounts[AgendaFilter.next7Days] = (filterCounts[AgendaFilter.next7Days] ?? 0) + events.length;
+      if (isThisMonth) filterCounts[AgendaFilter.thisMonth] = (filterCounts[AgendaFilter.thisMonth] ?? 0) + events.length;
+      if (isUpcoming) filterCounts[AgendaFilter.all] = (filterCounts[AgendaFilter.all] ?? 0) + events.length;
+
+      // Filter for display based on selected filter
       bool include = false;
       switch (_selectedFilter) {
-        case AgendaFilter.today:
-          include = _isSameDay(date, today);
-          break;
-        case AgendaFilter.tomorrow:
-          include = _isSameDay(date, tmrw);
-          break;
-        case AgendaFilter.next7Days:
-          include = !date.isBefore(today) && date.isBefore(next7DaysLimit);
-          break;
-        case AgendaFilter.thisMonth:
-          include = date.month == today.month && date.year == today.year;
-          break;
-        case AgendaFilter.all:
-          include = !date.isBefore(today);
-          break;
+        case AgendaFilter.today: include = isToday; break;
+        case AgendaFilter.tomorrow: include = isTomorrow; break;
+        case AgendaFilter.next7Days: include = isNext7; break;
+        case AgendaFilter.thisMonth: include = isThisMonth; break;
+        case AgendaFilter.all: include = isUpcoming; break;
       }
 
       if (include) {
-        eventsMap[date] = List.from(events)
+        eventsMap[date] = List<Event>.from(events)
           ..sort((a, b) {
-            // Prioritize all-day events at the top
-            if (a.isAllDay && !b.isAllDay) return -1;
-            if (!a.isAllDay && b.isAllDay) return 1;
-            // Otherwise sort by start time
+            if (a.isAllDay != b.isAllDay) return a.isAllDay ? -1 : 1;
             return a.startTime.compareTo(b.startTime);
           });
       }
@@ -335,7 +308,6 @@ class _AgendaViewState extends ConsumerState<AgendaView> {
     DateTime now,
   ) {
     final displayColor = event.customColor ?? event.color.color;
-    final theme = Theme.of(context);
 
     // Fade out past/missed events slightly for visual priority
     final isPast = now.isAfter(event.endTime) && !event.isAllDay;
@@ -345,9 +317,6 @@ class _AgendaViewState extends ConsumerState<AgendaView> {
         ? displayColor.withValues(alpha: isDark ? 0.25 : 0.15)
         : cardColor;
 
-    final Color textColor = event.isAllDay
-        ? (isDark ? displayColor.withValues(alpha: 0.9) : displayColor)
-        : (isDark ? Colors.white : Colors.black);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),

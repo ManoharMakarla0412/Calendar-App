@@ -42,21 +42,21 @@ class SettingsScreen extends ConsumerWidget {
             color: theme.cardColor,
             child: Column(
               children: [
-                ListTile(
-                  leading: Icon(
-                    Icons.text_fields,
-                    color: isDark ? Colors.white : Colors.black54,
-                  ),
-                  title: const Text('Font Size'),
-                  subtitle: Text(_getFontSizeLabel(settings.fontSize)),
-                  onTap: () =>
-                      _showFontSizeDialog(context, ref, settings.fontSize),
-                ),
-                Divider(
-                  height: 1,
-                  indent: 56,
-                  color: theme.dividerColor.withValues(alpha: 0.1),
-                ),
+                // ListTile(
+                //   leading: Icon(
+                //     Icons.text_fields,
+                //     color: isDark ? Colors.white : Colors.black54,
+                //   ),
+                //   title: const Text('Font Size'),
+                //   subtitle: Text(_getFontSizeLabel(settings.fontSize)),
+                //   onTap: () =>
+                //       _showFontSizeDialog(context, ref, settings.fontSize),
+                // ),
+                // Divider(
+                //   height: 1,
+                //   indent: 56,
+                //   color: theme.dividerColor.withValues(alpha: 0.1),
+                // ),
                 SwitchListTile(
                   secondary: Icon(
                     Icons.contrast,

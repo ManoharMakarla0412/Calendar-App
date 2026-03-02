@@ -34,8 +34,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   final List<String> _titles = ['Year', 'Month', 'Week', 'Day', 'Agenda'];
 
   Future<void> _onDestinationSelected(int index) async {
-    // Small delay to allow ripple effect to show as per user request
-    await Future.delayed(const Duration(milliseconds: 200));
     if (mounted) {
       setState(() {
         _currentIndex = index;
@@ -208,7 +206,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedDate = ref.watch(selectedDateProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -236,7 +233,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     String titleText = _titles[_currentIndex];
     Widget? customTitle;
 
-    // Custom Title for Year View
     if (_currentIndex == 0) {
       customTitle = Row(
         mainAxisSize: MainAxisSize.min,
@@ -244,36 +240,26 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           IconButton(
             icon: Icon(
               Icons.chevron_left,
-              color: theme.textTheme.titleLarge?.color,
+              color: isDark ? Colors.white : Colors.black,
             ),
             onPressed: () => _yearViewKey.currentState?.previousYear(),
           ),
           Flexible(
-            child: InkWell(
-              onTap: () => _yearViewKey.currentState?.selectYear(),
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12.0,
-                  vertical: 4.0,
-                ),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  transitionBuilder:
-                      (Widget child, Animation<double> animation) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
-                  child: Text(
-                    '$_currentYearViewYear',
-                    key: ValueKey(_currentYearViewYear),
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.5,
-                      color: theme.textTheme.titleLarge?.color,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+            child: TextButton(
+              onPressed: () => _yearViewKey.currentState?.selectYear(),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                '$_currentYearViewYear',
+                key: ValueKey(_currentYearViewYear),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 1,
+                  color: isDark ? Colors.white : Colors.black,
                 ),
               ),
             ),
@@ -281,7 +267,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           IconButton(
             icon: Icon(
               Icons.chevron_right,
-              color: theme.textTheme.titleLarge?.color,
+              color: isDark ? Colors.white : Colors.black,
             ),
             onPressed: () => _yearViewKey.currentState?.nextYear(),
           ),
@@ -290,30 +276,35 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     }
     // Custom Title for Month View
     else if (_currentIndex == 1) {
-      customTitle = MediaQuery.withNoTextScaling(
-        child: RichText(
-          text: TextSpan(
-            style: TextStyle(
-              fontSize: 20,
-              letterSpacing: 1.5,
-              color: theme.textTheme.titleLarge?.color,
-              fontFamily: theme.textTheme.titleLarge?.fontFamily,
-            ),
-            children: [
-              TextSpan(
-                text: DateFormat('MMM').format(selectedDate).toUpperCase(),
+      customTitle = Consumer(
+        builder: (context, ref, _) {
+          final selectedDate = ref.watch(selectedDateProvider);
+          return MediaQuery.withNoTextScaling(
+            child: RichText(
+              text: TextSpan(
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: theme.primaryColor,
+                  fontSize: 20,
+                  letterSpacing: 1.5,
+                  color: isDark ? Colors.white : Colors.black,
+                  fontFamily: theme.textTheme.titleLarge?.fontFamily,
                 ),
+                children: [
+                  TextSpan(
+                    text: DateFormat('MMM').format(selectedDate).toUpperCase(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : theme.primaryColor,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' ${selectedDate.year}',
+                    style: const TextStyle(fontWeight: FontWeight.w400),
+                  ),
+                ],
               ),
-              TextSpan(
-                text: ' ${selectedDate.year}',
-                style: const TextStyle(fontWeight: FontWeight.w400),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       );
       titleText = '';
     }
@@ -331,13 +322,19 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       child: ResponsiveScaffold(
         title: titleText,
         titleWidget: customTitle != null
-            ? GestureDetector(
+            ? InkWell(
                 onTap: () {
                   if (_currentIndex == 1) {
+                    final selectedDate = ref.read(selectedDateProvider);
                     _showMonthYearPicker(context, selectedDate);
                   }
                 },
-                child: customTitle,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: customTitle,
+                ),
               )
             : null,
         actions: [
@@ -365,7 +362,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             ),
             onPressed: () {
               ref.read(selectedDateProvider.notifier).setDate(DateTime.now());
-              if (_currentIndex == 0) setState(() => _currentIndex = 1);
+              setState(() => _currentIndex = 3); // Navigate to Day View
             },
           ),
 
