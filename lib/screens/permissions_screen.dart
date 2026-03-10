@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'main_screen.dart';
 
 class PermissionsScreen extends StatefulWidget {
-  const PermissionsScreen({super.key});
+  final bool isFromOnboarding;
+  
+  const PermissionsScreen({super.key, this.isFromOnboarding = false});
 
   @override
   State<PermissionsScreen> createState() => _PermissionsScreenState();
@@ -117,10 +120,11 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('App Permissions', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('App Permissions', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        automaticallyImplyLeading: !widget.isFromOnboarding,
       ),
       body: _loading 
         ? const Center(child: CircularProgressIndicator())
@@ -134,6 +138,27 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
               return _buildPermissionCard(context, item, status, isDark);
             },
           ),
+      bottomNavigationBar: widget.isFromOnboarding 
+        ? SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (_) => const MainScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: theme.primaryColor,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: const Text('Continue to App', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          )
+        : null,
     );
   }
 
@@ -167,7 +192,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
                     children: [
                       Text(
                         item.title,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -198,7 +223,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
             ),
             const SizedBox(height: 12),
             Text(
-              item.description,
+               item.description,
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.white60 : Colors.black54,

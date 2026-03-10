@@ -7,6 +7,7 @@ import '../features/events/presentation/events_view_model.dart';
 import '../providers/date_provider.dart';
 import '../providers/settings_provider.dart';
 import 'event_detail_screen.dart';
+import 'add_event_screen.dart';
 
 class MonthView extends ConsumerStatefulWidget {
   const MonthView({super.key});
@@ -213,8 +214,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
       }
     });
 
-    return Column(
+    return Stack(
       children: [
+        Column(
+          children: [
         Expanded(
           child: Container(
             color: theme.scaffoldBackgroundColor,
@@ -414,6 +417,94 @@ class _MonthViewState extends ConsumerState<MonthView> {
             ),
           ),
         ),
+          ],
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 16,
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => Padding(
+                        padding: EdgeInsets.only(
+                          top:
+                              MediaQuery.of(context).padding.top +
+                              40,
+                        ),
+                        child: AddEventScreen(
+                            initialDate: selectedDate),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(30),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.grey[900]!
+                              .withValues(alpha: 0.8)
+                          : Colors.grey[100]!
+                              .withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      'Add event on ${DateFormat('MMM d').format(selectedDate)}',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              FloatingActionButton(
+                heroTag: null,
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (context) => Padding(
+                      padding: EdgeInsets.only(
+                        top:
+                            MediaQuery.of(context).padding.top +
+                            40,
+                      ),
+                      child: AddEventScreen(
+                          initialDate: selectedDate),
+                    ),
+                  );
+                },
+                backgroundColor:
+                    isDark ? Colors.white : Colors.black,
+                elevation: 4,
+                child: Icon(
+                  Icons.add,
+                  color: isDark ? Colors.black : Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -497,7 +588,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               // Event indicators
               Expanded(
                 child: Padding(
@@ -532,10 +623,13 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
                       final isSingleEvent = sortedEvents.length == 1;
 
+                      final visibleEvents = sortedEvents.take(2).toList();
+                      final hasMore = sortedEvents.length > 2;
+
                       return Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                            ...sortedEvents.map((event) {
+                            ...visibleEvents.map((event) {
                               final color =
                                   event.customColor ?? event.color.color;
                               final isMeeting =
@@ -556,38 +650,34 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                       false);
 
                               if (isExpanded) {
-                                Color displayColor = color;
-                                if (isOutside) {
-                                  displayColor = color.withValues(alpha: 0.5);
-                                }
+                                 Color displayColor = color;
+                                 if (isOutside) {
+                                   displayColor = isDark ? Colors.grey[700]! : Colors.grey[400]!;
+                                 }
 
                                 // Premium Soft Pill Style
                                 return Semantics(
                                   label:
-                                      "Event: \${event.title}. \${event.isAllDay ? 'All day' : DateFormat('h:mm a').format(event.startTime)}",
+                                      "Event: ${event.title}. ${event.isAllDay ? 'All day' : DateFormat('h:mm a').format(event.startTime)}",
                                   button: true,
                                   child: GestureDetector(
                                     onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              EventDetailScreen(event: event),
-                                        ),
-                                      );
+                                      _showDayEventsBottomSheet(context, day, dayEvents);
                                     },
                                     child: Container(
                                       width: double.infinity,
                                       margin: const EdgeInsets.symmetric(
-                                        vertical: 1.5,
+                                        vertical: 0.5,
                                       ),
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 5,
-                                        vertical: 3,
+                                        vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        // Light tint background
-                                        color: Colors.white,
+                                        // Dynamic tint background
+                                        color: isDark 
+                                            ? Colors.white.withValues(alpha: 0.05) 
+                                            : Colors.white,
                                         borderRadius: BorderRadius.circular(6),
                                         // Subtle border for definition
                                         border: Border.all(
@@ -624,9 +714,11 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                               child: Icon(
                                                 Icons.videocam_rounded,
                                                 size: 11 * fs,
-                                                color: Colors.black,
-                                              ),
-                                            ),
+                                                 color: isOutside 
+                                                     ? (isDark ? Colors.grey[600] : Colors.grey[400])
+                                                     : (isDark ? Colors.white70 : Colors.black),
+                                               ),
+                                             ),
                                           Expanded(
                                             child: MediaQuery.withNoTextScaling(
                                               child: Tooltip(
@@ -637,7 +729,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                                     fontSize:
                                                         9.5 *
                                                         fs, // Standardized premium font size
-                                                    color: Colors.black,
+                                                    color: isOutside
+                                                        ? (isDark ? Colors.grey[600] : Colors.grey[500])
+                                                        : (isDark ? Colors.white : Colors.black),
                                                     fontWeight:
                                                         (isHoliday ||
                                                             event.isAllDay)
@@ -647,8 +741,8 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                                     letterSpacing: -0.2,
                                                   ),
                                                   softWrap: true,
-                                                   maxLines: isSingleEvent ? 4 : 2,
-                                                   overflow: TextOverflow.clip,
+                                                   maxLines: hasMore ? 1 : (isSingleEvent ? 2 : 1),
+                                                   overflow: TextOverflow.ellipsis,
                                                 ),
                                               ),
                                             ),
@@ -667,13 +761,26 @@ class _MonthViewState extends ConsumerState<MonthView> {
                                   ),
                                   decoration: BoxDecoration(
                                     color: isOutside
-                                        ? color.withValues(alpha: 0.3)
+                                        ? (isDark ? Colors.grey[800] : Colors.grey[300])
                                         : color,
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 );
                               }
                             }).toList(),
+                            if (hasMore)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Text(
+                                  '+${sortedEvents.length - 2} more',
+                                  style: TextStyle(
+                                    fontSize: 8.5 * fs,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white38 : Colors.grey[600],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
                         ],
                       );
                     },

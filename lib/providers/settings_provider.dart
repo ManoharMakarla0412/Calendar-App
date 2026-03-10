@@ -28,7 +28,7 @@ class AppSettings {
     this.highContrastMode = false,
     this.reduceMotion = false,
     this.themeMode = ThemeMode.system,
-    this.firstDayOfWeek = 1,
+    this.firstDayOfWeek = 1, // Fixed to Monday
     this.notificationsEnabled = true,
     this.notificationSound,
     this.vibrationEnabled = true,
@@ -63,7 +63,7 @@ class AppSettings {
       highContrastMode: highContrastMode ?? this.highContrastMode,
       reduceMotion: reduceMotion ?? this.reduceMotion,
       themeMode: themeMode ?? this.themeMode,
-      firstDayOfWeek: firstDayOfWeek ?? this.firstDayOfWeek,
+      firstDayOfWeek: 1, // Force Monday
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       notificationSound: notificationSound ?? this.notificationSound,
       vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
@@ -96,7 +96,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
       highContrastMode: prefs.getBool('high_contrast') ?? false,
       reduceMotion: prefs.getBool('reduce_motion') ?? false,
       themeMode: ThemeMode.values[prefs.getInt('theme_mode') ?? ThemeMode.system.index],
-      firstDayOfWeek: prefs.getInt('first_day_of_week') ?? 1,
+      firstDayOfWeek: 1, // Force Monday, ignoring stored preference
       notificationsEnabled: prefs.getBool('notifications_enabled') ?? true,
       notificationSound: prefs.getString('notification_sound'),
       vibrationEnabled: prefs.getBool('vibration_enabled') ?? true,
@@ -135,9 +135,7 @@ class SettingsNotifier extends Notifier<AppSettings> {
   }
 
   Future<void> setFirstDayOfWeek(int day) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('first_day_of_week', day);
-    state = state.copyWith(firstDayOfWeek: day);
+    // No-op: firstDayOfWeek is hardcoded to Monday
   }
 
   Future<void> setNotificationsEnabled(bool enabled) async {

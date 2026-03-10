@@ -320,9 +320,9 @@ class _YearGrid extends ConsumerWidget {
                                     ? FontWeight.w900
                                     : FontWeight.w600,
                                 fontSize: 15,
-                                color: theme.primaryColor.withValues(
-                                  alpha: isActive ? 1.0 : 0.8,
-                                ),
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white.withValues(alpha: isActive ? 1.0 : 0.8)
+                                    : theme.primaryColor.withValues(alpha: isActive ? 1.0 : 0.8),
                                 letterSpacing: 0.5,
                               ),
                             );

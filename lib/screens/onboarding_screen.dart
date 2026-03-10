@@ -6,6 +6,7 @@ import '../features/events/presentation/events_view_model.dart';
 import '../services/birthday_service.dart';
 import '../services/notification_service.dart';
 import 'main_screen.dart';
+import 'permissions_screen.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
@@ -34,12 +35,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _nextPage() {
-    if (_currentPage < 3) {
+    if (_currentPage < 2) {
       _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
     } else {
       ref.read(settingsProvider.notifier).setOnboardingCompleted(true);
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainScreen()),
+        MaterialPageRoute(builder: (_) => const PermissionsScreen(isFromOnboarding: true)),
       );
     }
   }
@@ -59,7 +60,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 onPressed: () {
                   ref.read(settingsProvider.notifier).setOnboardingCompleted(true);
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const MainScreen()),
+                    MaterialPageRoute(builder: (_) => const PermissionsScreen(isFromOnboarding: true)),
                   );
                 },
                 child: const Text('Skip'),
@@ -72,7 +73,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 onPageChanged: (page) => setState(() => _currentPage = page),
                 children: [
                    _buildWelcomeStep(),
-                   _buildPermissionsStep(),
                    _buildFeaturesStep(),
                    _buildReadyStep(),
                 ],
@@ -85,7 +85,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 children: [
                   // Indicators
                   Row(
-                    children: List.generate(4, (index) => AnimatedContainer(
+                    children: List.generate(3, (index) => AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       width: _currentPage == index ? 24 : 8,
                       height: 8,
@@ -104,7 +104,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       backgroundColor: Theme.of(context).primaryColor,
                       foregroundColor: Colors.white,
                     ),
-                    child: Text(_currentPage == 3 ? 'GET STARTED' : 'NEXT'),
+                    child: Text(_currentPage == 2 ? 'GET STARTED' : 'NEXT'),
                   ),
                 ],
               ),
@@ -140,111 +140,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Widget _buildPermissionsStep() {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Permissions',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: theme.textTheme.headlineLarge?.color),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'To provide the best experience, we need access to a few things. Here is why:',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          const SizedBox(height: 32),
-          
-          _buildPermissionItem(
-            icon: Icons.calendar_month,
-            title: 'Calendar Access',
-            description: 'To sync events from Google Calendar, iCloud, and others. Ensure your account is added in device Settings.',
-            isGranted: _calendarGranted,
-            onPressed: () async {
-              // Fetch device events triggers permission request
-              await ref.read(eventsProvider.notifier).fetchDeviceEvents();
-              setState(() => _calendarGranted = true);
-            },
-          ),
-          const SizedBox(height: 24),
-          _buildPermissionItem(
-            icon: Icons.notifications_active,
-            title: 'Notifications',
-            description: 'To ensure you never miss an important event or meeting.',
-            isGranted: _notificationGranted,
-            onPressed: () async {
-              await NotificationService().requestPermissions();
-              setState(() => _notificationGranted = true);
-            },
-          ),
-          const SizedBox(height: 24),
-          _buildPermissionItem(
-            icon: Icons.contacts,
-            title: 'Contacts',
-            description: 'To automatically find and sync birthdays of your friends and family.',
-            isGranted: _contactsGranted,
-            onPressed: () async {
-              if (await FlutterContacts.requestPermission()) {
-                 final birthdays = await BirthdayService().fetchBirthdays();
-                 ref.read(eventsProvider.notifier).syncBirthdays(birthdays);
-                 setState(() => _contactsGranted = true);
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPermissionItem({
-    required IconData icon,
-    required String title,
-    required String description,
-    required bool isGranted,
-    required VoidCallback onPressed,
-  }) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: theme.primaryColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: theme.primaryColor, size: 28),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 4),
-              Text(description, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        isGranted 
-          ? const Icon(Icons.check_circle, color: Colors.green, size: 32)
-          : TextButton(
-              onPressed: onPressed,
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              ),
-              child: const Text('Allow', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-            ),
-      ],
-    );
-  }
 
   Widget _buildFeaturesStep() {
     final theme = Theme.of(context);

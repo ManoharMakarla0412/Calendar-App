@@ -198,10 +198,9 @@ class _DayViewState extends ConsumerState<DayView> {
             child: ListView.builder(
               controller: _stripScrollController,
               scrollDirection: Axis.horizontal,
-              // Bounded item count — no infinite scroll, no ANR
               itemCount: _windowSize,
               physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.only(left: 65),
               itemBuilder: (context, index) {
                 final centerIdx = _windowSize ~/ 2;
                 final date = _stripCenterDate

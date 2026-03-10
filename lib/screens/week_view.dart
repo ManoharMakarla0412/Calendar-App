@@ -486,6 +486,7 @@ class _WeekViewState extends ConsumerState<WeekView> {
       color: theme.scaffoldBackgroundColor,
       child: Row(
         children: [
+          const SizedBox(width: 65), // Match _timeColumnWidth from MultiDayTimetable
           ...List.generate(7, (index) {
             final day = weekStart.add(Duration(days: index));
             final isToday = isSameDay(day, DateTime.now());
@@ -590,7 +591,7 @@ class _WeekViewState extends ConsumerState<WeekView> {
                                   child: Text(
                                     event.title,
                                     style: TextStyle(
-                                      fontSize: 8,
+                                      fontSize: 7,
                                       fontWeight: FontWeight.w500,
                                       color: isDark
                                           ? Colors.white.withValues(alpha: 0.8)
@@ -602,7 +603,7 @@ class _WeekViewState extends ConsumerState<WeekView> {
                                   ),
                                 );
                               }).toList(),
-                              if (dayEvents.length > 2)
+                               if (dayEvents.length > 2)
                                 Text(
                                   '+${dayEvents.length - 2} more',
                                   style: TextStyle(

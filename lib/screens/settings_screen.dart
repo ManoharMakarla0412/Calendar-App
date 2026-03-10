@@ -188,19 +188,6 @@ class SettingsScreen extends ConsumerWidget {
                   onTap: () =>
                       _showThemeDialog(context, ref, settings.themeMode),
                 ),
-                ListTile(
-                  leading: Icon(
-                    Icons.calendar_today,
-                    color: isDark ? Colors.white : Colors.black54,
-                  ),
-                  title: const Text('Start Week On'),
-                  subtitle: Text(_getStartDayLabel(settings.firstDayOfWeek)),
-                  onTap: () => _showStartDayDialog(
-                    context,
-                    ref,
-                    settings.firstDayOfWeek,
-                  ),
-                ),
               ],
             ),
           ),
@@ -509,26 +496,7 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  String _getStartDayLabel(int day) {
-    switch (day) {
-      case 1:
-        return 'Monday';
-      case 2:
-        return 'Tuesday';
-      case 3:
-        return 'Wednesday';
-      case 4:
-        return 'Thursday';
-      case 5:
-        return 'Friday';
-      case 6:
-        return 'Saturday';
-      case 7:
-        return 'Sunday';
-      default:
-        return 'Monday';
-    }
-  }
+
 
   void _showFontSizeDialog(
     BuildContext context,
@@ -698,109 +666,6 @@ class SettingsScreen extends ConsumerWidget {
               onChanged: (value) {
                 if (value != null) {
                   ref.read(settingsProvider.notifier).setHolidayCountry(value);
-                  Navigator.pop(ctx);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showStartDayDialog(
-    BuildContext context,
-    WidgetRef ref,
-    int currentDay,
-  ) {
-    final theme = Theme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Start Week On'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<int>(
-              title: const Text('Monday'),
-              value: 1,
-              groupValue: currentDay,
-              activeColor: theme.colorScheme.primary,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setFirstDayOfWeek(value);
-                  Navigator.pop(ctx);
-                }
-              },
-            ),
-            RadioListTile<int>(
-              title: const Text('Tuesday'),
-              value: 2,
-              groupValue: currentDay,
-              activeColor: theme.colorScheme.primary,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setFirstDayOfWeek(value);
-                  Navigator.pop(ctx);
-                }
-              },
-            ),
-            RadioListTile<int>(
-              title: const Text('Wednesday'),
-              value: 3,
-              groupValue: currentDay,
-              activeColor: theme.colorScheme.primary,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setFirstDayOfWeek(value);
-                  Navigator.pop(ctx);
-                }
-              },
-            ),
-            RadioListTile<int>(
-              title: const Text('Thursday'),
-              value: 4,
-              groupValue: currentDay,
-              activeColor: theme.colorScheme.primary,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setFirstDayOfWeek(value);
-                  Navigator.pop(ctx);
-                }
-              },
-            ),
-            RadioListTile<int>(
-              title: const Text('Friday'),
-              value: 5,
-              groupValue: currentDay,
-              activeColor: theme.colorScheme.primary,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setFirstDayOfWeek(value);
-                  Navigator.pop(ctx);
-                }
-              },
-            ),
-            RadioListTile<int>(
-              title: const Text('Saturday'),
-              value: 6,
-              groupValue: currentDay,
-              activeColor: theme.colorScheme.primary,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setFirstDayOfWeek(value);
-                  Navigator.pop(ctx);
-                }
-              },
-            ),
-            RadioListTile<int>(
-              title: const Text('Sunday'),
-              value: 7,
-              groupValue: currentDay,
-              activeColor: theme.colorScheme.primary,
-              onChanged: (value) {
-                if (value != null) {
-                  ref.read(settingsProvider.notifier).setFirstDayOfWeek(value);
                   Navigator.pop(ctx);
                 }
               },

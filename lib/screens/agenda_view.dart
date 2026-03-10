@@ -99,10 +99,6 @@ class _AgendaViewState extends ConsumerState<AgendaView> {
 
     // Optimized Single-Pass Filter & Count Logic
     final eventsMap = <DateTime, List<Event>>{};
-    final filterCounts = <AgendaFilter, int>{
-      for (var f in AgendaFilter.values) f: 0
-    };
-
     eventsMapRaw.forEach((date, events) {
       if (events.isEmpty) return;
 
@@ -111,13 +107,6 @@ class _AgendaViewState extends ConsumerState<AgendaView> {
       final isNext7 = !date.isBefore(today) && date.isBefore(next7DaysLimit);
       final isThisMonth = date.month == today.month && date.year == today.year;
       final isUpcoming = !date.isBefore(today);
-
-      // Update counts
-      if (isToday) filterCounts[AgendaFilter.today] = (filterCounts[AgendaFilter.today] ?? 0) + events.length;
-      if (isTomorrow) filterCounts[AgendaFilter.tomorrow] = (filterCounts[AgendaFilter.tomorrow] ?? 0) + events.length;
-      if (isNext7) filterCounts[AgendaFilter.next7Days] = (filterCounts[AgendaFilter.next7Days] ?? 0) + events.length;
-      if (isThisMonth) filterCounts[AgendaFilter.thisMonth] = (filterCounts[AgendaFilter.thisMonth] ?? 0) + events.length;
-      if (isUpcoming) filterCounts[AgendaFilter.all] = (filterCounts[AgendaFilter.all] ?? 0) + events.length;
 
       // Filter for display based on selected filter
       bool include = false;
@@ -177,17 +166,16 @@ class _AgendaViewState extends ConsumerState<AgendaView> {
                 itemBuilder: (context, index) {
                   final filter = AgendaFilter.values[index];
                   final isSelected = _selectedFilter == filter;
-                  final count = filterCounts[filter] ?? 0;
 
                   return ChoiceChip(
                     label: Text(
-                      count > 0 ? '${filter.label} $count' : filter.label,
+                      filter.label,
                       style: TextStyle(
                         fontWeight: isSelected
                             ? FontWeight.w600
                             : FontWeight.w400,
                         fontSize:
-                            10 * fs, // Even smaller text to accommodate counts
+                            10.5 * fs, // Even smaller text to accommodate counts
                         color: isSelected
                             ? Colors.white
                             : (isDark ? Colors.white70 : Colors.black87),
@@ -202,14 +190,14 @@ class _AgendaViewState extends ConsumerState<AgendaView> {
                         : Colors.black.withValues(alpha: 0.05),
                     selectedColor: theme.colorScheme.primary,
                     showCheckmark: false,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                       side: BorderSide.none,
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 0,
-                    ), // Tight padding
                   );
                 },
               ),

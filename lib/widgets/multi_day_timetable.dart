@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/event.dart';
 import '../screens/event_detail_screen.dart';
 import '../theme/app_theme.dart';
+import '../screens/add_event_screen.dart';
 
 class MultiDayTimetable extends StatefulWidget {
   final DateTime initialDate;
@@ -29,7 +30,7 @@ class MultiDayTimetable extends StatefulWidget {
 
 class _MultiDayTimetableState extends State<MultiDayTimetable> {
   final ScrollController _scrollController = ScrollController();
-  final double _timeColumnWidth = 50.0;
+  final double _timeColumnWidth = 70.0;
   late Timer _timer;
   DateTime _currentTime = DateTime.now();
 
@@ -96,26 +97,49 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
       final durationMin = event.endTime.difference(event.startTime).inMinutes;
       final height = (durationMin / 60.0) * hourHeight;
 
-      double width = dayWidth;
-      double left = 0.0;
+      double width;
+      double left;
 
-      bool hasOverlap = false;
-      bool isIndented = false;
+      // Improved Overlap Logic: Side-by-side (columnar) layout
+      List<Event> overlapping = dayEvents.where((e) =>
+          e != event &&
+          e.startTime.isBefore(event.endTime) &&
+          e.endTime.isAfter(event.startTime)).toList();
 
-      for (int j = 0; j < dayEvents.length; j++) {
-        if (i == j) continue;
-        final other = dayEvents[j];
-        if (other.startTime.isBefore(event.endTime) && other.endTime.isAfter(event.startTime)) {
-          hasOverlap = true;
-          if (j < i) isIndented = true;
+      if (overlapping.isEmpty) {
+        width = dayWidth;
+        left = 0.0;
+      } else {
+        // Simple but effective column assignment
+        List<Event> cluster = [event, ...overlapping];
+        cluster.sort((a, b) => a.startTime.compareTo(b.startTime));
+        
+        int totalColumns = 0;
+        int myColumn = 0;
+        
+        // Find which column this event belongs to
+        List<List<Event>> columns = [];
+        for (var e in cluster) {
+          bool placed = false;
+          for (int i = 0; i < columns.length; i++) {
+            if (!columns[i].any((other) => 
+                other.startTime.isBefore(e.endTime) && 
+                other.endTime.isAfter(e.startTime))) {
+              columns[i].add(e);
+              if (e == event) myColumn = i;
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            columns.add([e]);
+            if (e == event) myColumn = columns.length - 1;
+          }
         }
-      }
-
-      if (hasOverlap) {
-        width = dayWidth * 0.85;
-        if (isIndented) {
-          left = dayWidth * 0.15;
-        }
+        
+        totalColumns = columns.length;
+        width = dayWidth / totalColumns;
+        left = myColumn * width;
       }
 
       children.add(
@@ -156,19 +180,43 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          event.title,
-                          style: TextStyle(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (height > 30)
+                        Builder(builder: (context) {
+                          final isMeeting = event.title.toLowerCase().contains('stand up') ||
+                              event.title.toLowerCase().contains('meet') ||
+                              event.title.toLowerCase().contains('call') ||
+                              event.title.toLowerCase().contains('session');
+                          
+                          return Row(
+                            children: [
+                              if (isMeeting)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Icon(
+                                    Icons.videocam_rounded,
+                                    size: 12,
+                                    color: (Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.white
+                                        : Colors.black).withValues(alpha: 0.7),
+                                  ),
+                                ),
+                              Expanded(
+                                child: Text(
+                                  event.title,
+                                  style: TextStyle(
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
+                        if (height > 35)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
@@ -230,7 +278,9 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                     child: Stack(
                       children: [
                         Row(
-                          children: days.map((day) {
+                          children: [
+                            SizedBox(width: _timeColumnWidth),
+                            ...days.map((day) {
                             final allDayEvents = _getEventsForDay(day, allDayOnly: true);
                             return Expanded(
                               child: Container(
@@ -272,7 +322,8 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                               ),
                             );
                           }).toList(),
-                        ),
+                        ],
+                      ),
                         Positioned(
                           left: 0,
                           top: 0,
@@ -280,11 +331,10 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                           child: Container(
                             width: _timeColumnWidth,
                             alignment: Alignment.center,
-                            color: theme.scaffoldBackgroundColor.withValues(alpha: 0.6),
                             child: Text(
                               'ALL DAY',
                               style: TextStyle(
-                                fontSize: 8,
+                                fontSize: 9,
                                 fontWeight: FontWeight.w900,
                                 color: theme.colorScheme.primary,
                                 letterSpacing: -0.5,
@@ -304,7 +354,7 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
-                              color: theme.dividerColor.withValues(alpha: 0.05),
+                              color: theme.dividerColor.withValues(alpha: theme.brightness == Brightness.dark ? 0.15 : 0.08),
                             ),
                           ),
                         ),
@@ -312,27 +362,65 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                     ),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: days.map((day) => Expanded(
-                        child: Container(
-                          height: widget.hourHeight * 24,
-                          decoration: BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: theme.dividerColor.withValues(alpha: 0.05),
+                      children: [
+                        SizedBox(width: _timeColumnWidth),
+                        ...days.map((day) => Expanded(
+                        child: GestureDetector(
+                          onTapUp: (details) {
+                            // Calculate which time slot was tapped
+                            final RenderBox box = context.findRenderObject() as RenderBox;
+                            final localOffset = details.localPosition;
+                            
+                            // hourHeight defines the height of one hour block
+                            final double tappedHourDecimal = localOffset.dy / widget.hourHeight;
+                            final int tappedHour = tappedHourDecimal.floor();
+                            final int tappedMinute = ((tappedHourDecimal - tappedHour) * 60).round();
+                            
+                            // Ensure minutes are rounded to a nice intervals (optional: nearest 15/30)
+                            final int niceMinute = (tappedMinute ~/ 15) * 15;
+
+                            final tappedDateTime = DateTime(
+                              day.year, 
+                              day.month, 
+                              day.day, 
+                              tappedHour, 
+                              niceMinute
+                            );
+
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => Padding(
+                                padding: EdgeInsets.only(
+                                  top: MediaQuery.of(context).padding.top + 40,
+                                ),
+                                child: AddEventScreen(initialDate: tappedDateTime),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            height: widget.hourHeight * 24,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                left: BorderSide(
+                                  color: theme.dividerColor.withValues(alpha: theme.brightness == Brightness.dark ? 0.15 : 0.08),
+                                ),
                               ),
                             ),
-                          ),
-                          child: LayoutBuilder(
-                            builder: (context, constraints) => Stack(
-                              children: _buildEventWidgets(
-                                _getEventsForDay(day),
-                                constraints.maxWidth,
-                                widget.hourHeight,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) => Stack(
+                                children: _buildEventWidgets(
+                                  _getEventsForDay(day),
+                                  constraints.maxWidth,
+                                  widget.hourHeight,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      )).toList(),
+                        )).toList(),
+                      ],
                     ),
                     IgnorePointer(
                       child: Column(
@@ -340,16 +428,14 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                           height: widget.hourHeight,
                           child: Container(
                             width: _timeColumnWidth,
-                            padding: const EdgeInsets.only(right: 6, top: 2),
-                            decoration: BoxDecoration(
-                              color: theme.scaffoldBackgroundColor.withValues(alpha: 0.4),
-                            ),
+                            padding: const EdgeInsets.only(right: 8, top: 4),
+                            alignment: Alignment.topRight,
                             child: Text(
-                              hour == 0 ? '' : (hour >= 12 ? (hour == 12 ? '12PM' : '${hour - 12}PM') : '$hour AM'),
-                              style: const TextStyle(
-                                fontSize: 9,
-                                color: Color(0xFF64748B),
-                                fontWeight: FontWeight.w600,
+                              hour == 0 ? '' : (hour >= 12 ? (hour == 12 ? '12  PM' : '${hour - 12}  PM') : '$hour  AM'),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.brightness == Brightness.dark ? Colors.white70 : const Color(0xFF64748B),
+                                fontWeight: FontWeight.bold,
                               ),
                               textAlign: TextAlign.right,
                             ),
@@ -360,7 +446,7 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                     if (days.any((d) => _isSameDay(d, _currentTime)))
                       Positioned(
                         top: (_currentTime.hour * widget.hourHeight) + (_currentTime.minute / 60.0 * widget.hourHeight),
-                        left: 0,
+                        left: _timeColumnWidth,
                         right: 0,
                         child: Stack(
                           clipBehavior: Clip.none,
@@ -371,30 +457,11 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
                               color: Colors.red,
                             ),
                             Positioned(
-                              left: 0,
-                              top: -10,
+                              left: -3,
+                              top: -4,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  DateFormat('h:mm a').format(_currentTime),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: -2,
-                              top: -3.5,
-                              child: Container(
-                                width: 8,
-                                height: 8,
+                                width: 10,
+                                height: 10,
                                 decoration: const BoxDecoration(
                                   color: Colors.red,
                                   shape: BoxShape.circle,
@@ -421,16 +488,16 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
         color: theme.colorScheme.surface,
         boxShadow: [
           BoxShadow(
-            color: theme.brightness == Brightness.dark
-                ? Colors.black.withValues(alpha: 0.2)
-                : Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
-        children: days.map((day) {
+        children: [
+          SizedBox(width: _timeColumnWidth),
+          ...days.map((day) {
           final isToday = _isSameDay(day, DateTime.now());
           return Expanded(
             child: InkWell(
@@ -466,6 +533,7 @@ class _MultiDayTimetableState extends State<MultiDayTimetable> {
             ),
           );
         }).toList(),
+        ],
       ),
     );
   }
